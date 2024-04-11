@@ -238,11 +238,18 @@ jobs:
         - name: Set up Docker Buildx
           uses: docker/setup-buildx-action@v3
 
+        - name: Login to Docker Hub
+          uses: docker/login-action@v3
+          with:
+            username: ${{ vars.DOCKER_HUB_USER }}
+            password: ${{ secrets.REGISTRY_PASS }}
+
         - name: Build and push Docker image for Dockerfile
           uses: docker/build-push-action@v5
           with:
             context: .
             target: scratch
+            push: true
             tags: |
                 ${{ env.DOCKER_IMAGE_IMMUDB }}:dev
             file: build/Dockerfile
@@ -252,6 +259,7 @@ jobs:
           with:
             context: .
             target: ${{ env.DEBIAN_VERSION }}
+            push: true
             tags: |
                 ${{ env.DOCKER_IMAGE_IMMUDB }}:dev-${{ env.DEBIAN_VERSION }}
             file: build/Dockerfile
@@ -260,6 +268,7 @@ jobs:
           uses: docker/build-push-action@v5
           with:
             context: .
+            push: true
             tags: |
                 ${{ env.DOCKER_IMAGE_IMMUDB }}:dev-${{ env.ALMA_VERSION }}
             file: build/Dockerfile.alma
@@ -268,6 +277,7 @@ jobs:
           uses: docker/build-push-action@v5
           with:
               context: .
+              push: true
               tags: |
                     ${{ env.DOCKER_IMAGE_IMMUADMIN }}:dev
               file: build/Dockerfile.immuadmin
@@ -276,6 +286,7 @@ jobs:
           uses: docker/build-push-action@v5
           with:
             context: .
+            push: true
             tags: |
                 ${{ env.DOCKER_IMAGE_IMMUCLIENT }}:dev
             file: build/Dockerfile.immuclient
@@ -284,6 +295,7 @@ jobs:
           uses: docker/build-push-action@v5
           with:
             context: .
+            push: true
             tags: |
                 ${{ env.DOCKER_IMAGE_IMMUDB_FIPS }}:dev
             file: build/fips/Dockerfile
@@ -292,6 +304,7 @@ jobs:
           uses: docker/build-push-action@v5
           with:
             context: .
+            push: true
             tags: |
                 ${{ env.DOCKER_IMAGE_IMMUADMIN_FIPS }}:dev
             file: build/fips/Dockerfile.immuadmin
@@ -300,6 +313,7 @@ jobs:
           uses: docker/build-push-action@v5
           with:
             context: .
+            push: true
             tags: |
                 ${{ env.DOCKER_IMAGE_IMMUCLIENT_FIPS }}:dev
             file: build/fips/Dockerfile.immuclient
@@ -311,17 +325,6 @@ jobs:
               VERSION_TAG="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
               VERSION_TAG_SHORT="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
             fi
-
-            docker login -u "${{ secrets.REGISTRY_USER }}" -p "${{ secrets.REGISTRY_PASS }}"
-
-            docker push "${DOCKER_IMAGE_IMMUDB}:dev"
-            docker push "${DOCKER_IMAGE_IMMUDB}:dev-${DEBIAN_VERSION}"
-            docker push "${DOCKER_IMAGE_IMMUDB}:dev-${ALMA_VERSION}"
-            docker push "${DOCKER_IMAGE_IMMUADMIN}:dev"
-            docker push "${DOCKER_IMAGE_IMMUCLIENT}:dev"
-            docker push "${DOCKER_IMAGE_IMMUDB_FIPS}:dev"
-            docker push "${DOCKER_IMAGE_IMMUADMIN_FIPS}:dev"
-            docker push "${DOCKER_IMAGE_IMMUCLIENT_FIPS}:dev"
 
             if [[ ! -z "$VERSION_TAG" ]]; then
               for tag in "${VERSION_TAG}" "${VERSION_TAG_SHORT}" "latest"; do
@@ -351,9 +354,6 @@ jobs:
 
               done
             fi
-
-            docker logout
-
 
   coveralls:
     name: Publish coverage
