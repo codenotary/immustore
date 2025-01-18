@@ -153,9 +153,7 @@ func (s *fileSorter) mergeAllChunks() (resultReader, error) {
 			newChunks[len(chunks)/2] = lastChunk
 		}
 
-		temp := currFile
-		currFile = outFile
-		outFile = temp
+		currFile, outFile = outFile, currFile
 
 		_, err = outFile.Seek(0, io.SeekStart)
 		if err != nil {
