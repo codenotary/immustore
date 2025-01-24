@@ -96,7 +96,7 @@ func NewDocumentIDFromHexEncodedString(hexEncodedDocID string) (DocumentID, erro
 
 	_, err := hex.Decode(buf, []byte(hexEncodedDocID))
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidHex
 	}
 
 	return NewDocumentIDFromRawBytes(buf)

@@ -37,6 +37,7 @@ var (
 	ErrReservedName            = errors.New("reserved name")
 	ErrLimitedIndexCreation    = errors.New("unique index creation is only supported on empty collections")
 	ErrConflict                = errors.New("conflict due to uniqueness contraint violation or read document was updated by another transaction")
+	ErrInvalidHex              = errors.New("value is not valid hex, has to have even number of characters [0-9a-f]")
 )
 
 func mayTranslateError(err error) error {

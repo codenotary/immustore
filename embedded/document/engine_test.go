@@ -1283,6 +1283,101 @@ func TestDocumentUpdate(t *testing.T) {
 		require.Len(t, revisions, 1)
 	})
 }
+func TestCustomDocumentID(t *testing.T) {
+	// Create a new engine instance
+	ctx := context.Background()
+	engine := makeEngine(t)
+
+	// Create a test collection with a single document
+	collectionName := "test_collection"
+	customIDField := "customID"
+
+	err := engine.CreateCollection(
+		context.Background(),
+		"admin",
+		collectionName,
+		"customID",
+		[]*protomodel.Field{
+			{Name: "name", Type: protomodel.FieldType_STRING},
+			{Name: "age", Type: protomodel.FieldType_DOUBLE},
+		},
+		[]*protomodel.Index{},
+	)
+	require.NoError(t, err)
+
+	t.Run("insert document with custom doc ID should pass", func(t *testing.T) {
+		_, docID, err := engine.InsertDocument(context.Background(), "admin", collectionName, &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				customIDField: structpb.NewStringValue("1234"),
+				"name":        structpb.NewStringValue("Alice"),
+				"age":         structpb.NewNumberValue(30),
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, "1234", docID.EncodeToHexString())
+
+		// query document
+		query := &protomodel.Query{
+			CollectionName: collectionName,
+			Expressions: []*protomodel.QueryExpression{{
+				FieldComparisons: []*protomodel.FieldComparison{{
+					Field: customIDField, Operator: protomodel.ComparisonOperator_EQ, Value: structpb.NewStringValue("1234"),
+				}},
+			}},
+		}
+
+		reader, err := engine.GetDocuments(ctx, query, 0)
+		require.NoError(t, err)
+		defer reader.Close()
+
+		doc, err := reader.Read(ctx)
+		require.NoError(t, err)
+		// require.Equal(t, txID, doc.)
+		require.Equal(t, "1234", doc.Document.Fields[customIDField].GetStringValue())
+	})
+
+	t.Run("update document with custom doc ID", func(t *testing.T) {
+		txID, _, err := engine.InsertDocument(context.Background(), "admin", collectionName, &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				customIDField: structpb.NewStringValue("1235"),
+				"name":        structpb.NewStringValue("Bob"),
+				"age":         structpb.NewNumberValue(50),
+			},
+		})
+		require.NoError(t, err)
+
+		query := &protomodel.Query{
+			CollectionName: collectionName,
+			Expressions: []*protomodel.QueryExpression{{
+				FieldComparisons: []*protomodel.FieldComparison{{
+					Field: customIDField, Operator: protomodel.ComparisonOperator_EQ, Value: structpb.NewStringValue("1235"),
+				}},
+			}},
+		}
+
+		docs, err := engine.ReplaceDocuments(context.Background(), "admin", query, &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				customIDField: structpb.NewStringValue("1235"),
+				"age":         structpb.NewNumberValue(51),
+			},
+		})
+		require.NoError(t, err)
+		require.Len(t, docs, 1)
+		require.Equal(t, txID+1, docs[0].TransactionId)
+		require.Equal(t, "1235", docs[0].DocumentId)
+	})
+
+	t.Run("insert document not hex should fail", func(t *testing.T) {
+		_, _, err := engine.InsertDocument(context.Background(), "admin", collectionName, &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				customIDField: structpb.NewStringValue("test_not_hex"),
+				"name":        structpb.NewStringValue("Alice"),
+				"age":         structpb.NewNumberValue(30),
+			},
+		})
+		require.Error(t, err, ErrInvalidHex)
+	})
+}
 
 func TestFloatSupport(t *testing.T) {
 	ctx := context.Background()
