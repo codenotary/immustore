@@ -533,42 +533,44 @@ func OpenWith(path string, vLogs []appendable.Appendable, txLog, cLog appendable
 	precommittedAlh := committedAlh
 	precommittedTxLogSize := committedTxLogSize
 
-	// read pre-committed txs from txLog and insert into cLogBuf to continue with the commit process
-	// txLog may be partially written, precommitted transactions loading is terminated if an inconsistency is found
-	txReader := appendable.NewReaderFrom(txLog, precommittedTxLogSize, multiapp.DefaultReadBufferSize)
+	if !opts.DiscardPrecommittedTransactions {
+		// read pre-committed txs from txLog and insert into cLogBuf to continue with the commit process
+		// txLog may be partially written, precommitted transactions loading is terminated if an inconsistency is found
+		txReader := appendable.NewReaderFrom(txLog, precommittedTxLogSize, multiapp.DefaultReadBufferSize)
 
-	tx, _ := txPool.Alloc()
+		tx, _ := txPool.Alloc()
 
-	for {
-		err = tx.readFrom(txReader, false)
-		if errors.Is(err, io.EOF) {
-			break
+		for {
+			err = tx.readFrom(txReader, false)
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				opts.logger.Infof("%v: discarding pre-committed transaction: %d", err, precommittedTxID+1)
+				break
+			}
+
+			if tx.header.ID != precommittedTxID+1 || tx.header.PrevAlh != precommittedAlh {
+				opts.logger.Infof("%v: discarding pre-committed transaction: %d", ErrCorruptedData, precommittedTxID+1)
+				break
+			}
+
+			precommittedTxID++
+			precommittedAlh = tx.header.Alh()
+
+			txSize := int(txReader.ReadCount() - (precommittedTxLogSize - committedTxLogSize))
+
+			err = cLogBuf.put(precommittedTxID, precommittedAlh, precommittedTxLogSize, txSize)
+			if err != nil {
+				txPool.Release(tx)
+				return nil, fmt.Errorf("%v: while loading pre-committed transaction: %v", err, precommittedTxID+1)
+			}
+
+			precommittedTxLogSize += int64(txSize)
 		}
-		if err != nil {
-			opts.logger.Infof("%v: discarding pre-committed transaction: %d", err, precommittedTxID+1)
-			break
-		}
 
-		if tx.header.ID != precommittedTxID+1 || tx.header.PrevAlh != precommittedAlh {
-			opts.logger.Infof("%v: discarding pre-committed transaction: %d", ErrCorruptedData, precommittedTxID+1)
-			break
-		}
-
-		precommittedTxID++
-		precommittedAlh = tx.header.Alh()
-
-		txSize := int(txReader.ReadCount() - (precommittedTxLogSize - committedTxLogSize))
-
-		err = cLogBuf.put(precommittedTxID, precommittedAlh, precommittedTxLogSize, txSize)
-		if err != nil {
-			txPool.Release(tx)
-			return nil, fmt.Errorf("%v: while loading pre-committed transaction: %v", err, precommittedTxID+1)
-		}
-
-		precommittedTxLogSize += int64(txSize)
+		txPool.Release(tx)
 	}
-
-	txPool.Release(tx)
 
 	vLogsMap := make(map[byte]*refVLog, len(vLogs))
 	vLogUnlockedList := list.New()
