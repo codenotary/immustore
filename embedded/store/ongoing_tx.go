@@ -118,14 +118,16 @@ func newOngoingTx(ctx context.Context, s *ImmuStore, opts *TxOptions) (*OngoingT
 
 	tx.mode = opts.Mode
 
-	if opts.Mode == WriteOnlyTx {
+	if opts.Mode != WriteOnlyTx {
 		return tx, nil
 	}
 
 	tx.snapshotMustIncludeTxID = opts.SnapshotMustIncludeTxID
 	tx.snapshotRenewalPeriod = opts.SnapshotRenewalPeriod
-	tx.mvccReadSet = &mvccReadSet{}
 
+	if opts.Mode == ReadWriteTx {
+		tx.mvccReadSet = &mvccReadSet{}
+	}
 	return tx, nil
 }
 
@@ -562,7 +564,6 @@ func (tx *OngoingTx) NewKeyReader(spec KeyReaderSpec) (KeyReader, error) {
 
 		return snap.NewKeyReader(spec)
 	}
-
 	return newOngoingTxKeyReader(tx, spec)
 }
 

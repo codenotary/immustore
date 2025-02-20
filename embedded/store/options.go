@@ -147,6 +147,8 @@ type Options struct {
 	CompressionLevel  int
 	EmbeddedValues    bool
 	PreallocFiles     bool
+	// Discard processing of transactions that were precommitted before opening
+	DiscardPrecommittedTransactions bool
 
 	// options below affect indexing
 	IndexOpts *IndexOptions
@@ -247,17 +249,17 @@ func DefaultOptions() *Options {
 		WriteTxHeaderVersion: DefaultWriteTxHeaderVersion,
 
 		// options below are only set during initialization and stored as metadata
-		MaxTxEntries:      DefaultMaxTxEntries,
-		MaxKeyLen:         DefaultMaxKeyLen,
-		MaxValueLen:       DefaultMaxValueLen,
-		FileSize:          DefaultFileSize,
-		CompressionFormat: DefaultCompressionFormat,
-		CompressionLevel:  DefaultCompressionLevel,
-		EmbeddedValues:    DefaultEmbeddedValues,
-		PreallocFiles:     DefaultPreallocFiles,
-
-		IndexOpts: DefaultIndexOptions(),
-		AHTOpts:   DefaultAHTOptions(),
+		MaxTxEntries:                    DefaultMaxTxEntries,
+		MaxKeyLen:                       DefaultMaxKeyLen,
+		MaxValueLen:                     DefaultMaxValueLen,
+		FileSize:                        DefaultFileSize,
+		CompressionFormat:               DefaultCompressionFormat,
+		CompressionLevel:                DefaultCompressionLevel,
+		EmbeddedValues:                  DefaultEmbeddedValues,
+		PreallocFiles:                   DefaultPreallocFiles,
+		DiscardPrecommittedTransactions: false,
+		IndexOpts:                       DefaultIndexOptions(),
+		AHTOpts:                         DefaultAHTOptions(),
 	}
 }
 
@@ -617,6 +619,11 @@ func (opts *Options) WithIndexOptions(indexOptions *IndexOptions) *Options {
 
 func (opts *Options) WithAHTOptions(ahtOptions *AHTOptions) *Options {
 	opts.AHTOpts = ahtOptions
+	return opts
+}
+
+func (opts *Options) WithDiscardPrecommittedTransactions(discard bool) *Options {
+	opts.DiscardPrecommittedTransactions = discard
 	return opts
 }
 
