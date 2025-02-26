@@ -1314,6 +1314,100 @@ func TestTBTreeIncreaseTs(t *testing.T) {
 	require.ErrorIs(t, err, ErrAlreadyClosed)
 }
 
+func TestTBTreeFlushAfterIncreaseTs(t *testing.T) {
+	dir := t.TempDir()
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
+
+	tbtree, err := Open(dir, DefaultOptions())
+	require.NoError(t, err)
+
+	t.Run("increase ts to empty tree", func(t *testing.T) {
+		err = tbtree.IncreaseTs(100)
+		require.NoError(t, err)
+
+		_, _, err = tbtree.Flush()
+		require.NoError(t, err)
+
+		err = tbtree.Close()
+		require.NoError(t, err)
+
+		tbtree, err = Open(dir, DefaultOptions())
+		require.NoError(t, err)
+
+		require.Equal(t, tbtree.Ts(), uint64(100))
+	})
+
+	insertValues := func(n int) {
+		for i := 0; i < n; i++ {
+			var buf [4]byte
+			binary.BigEndian.PutUint32(buf[:], uint32(i))
+
+			err := tbtree.Insert(
+				buf[:],
+				buf[:],
+			)
+			require.NoError(t, err)
+		}
+	}
+
+	t.Run("increase ts after insertions", func(t *testing.T) {
+		insertValues(10)
+		require.Equal(t, uint64(110), tbtree.Ts())
+
+		err := tbtree.IncreaseTs(200)
+		require.NoError(t, err)
+
+		_, _, err = tbtree.Flush()
+		require.NoError(t, err)
+
+		err = tbtree.Close()
+		require.NoError(t, err)
+
+		tbtree, err = Open(dir, DefaultOptions())
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(200), tbtree.Ts())
+
+		ln, isLeaf := tbtree.root.(*leafNode)
+		require.True(t, isLeaf)
+
+		require.Equal(t, uint64(200), ln.ts())
+		require.Len(t, ln.values, 10)
+
+		for _, v := range ln.values {
+			require.Less(t, v.timedValue().Ts, ln.ts())
+		}
+	})
+
+	t.Run("increase ts after more insertions", func(t *testing.T) {
+		insertValues(1000)
+		require.Equal(t, uint64(1200), tbtree.Ts())
+
+		err := tbtree.IncreaseTs(2500)
+		require.NoError(t, err)
+
+		_, _, err = tbtree.Flush()
+		require.NoError(t, err)
+
+		err = tbtree.Close()
+		require.NoError(t, err)
+
+		tbtree, err = Open(dir, DefaultOptions())
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(2500), tbtree.Ts())
+
+		nd, isInner := tbtree.root.(*innerNode)
+		require.True(t, isInner)
+
+		for _, child := range nd.nodes {
+			require.Less(t, child.ts(), nd.ts())
+		}
+	})
+}
+
 func BenchmarkRandomInsertion(b *testing.B) {
 	seed := rand.NewSource(time.Now().UnixNano())
 	rnd := rand.New(seed)

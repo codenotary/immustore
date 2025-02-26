@@ -442,8 +442,15 @@ func (n *innerNode) writeTo(nw, hw io.Writer, writeOpts *WriteOpts, buf []byte) 
 	buf[bi] = InnerNodeType
 	bi++
 
-	binary.BigEndian.PutUint16(buf[bi:], uint16(len(n.nodes)))
-	bi += 2
+	if n.tsMutated() {
+		binary.BigEndian.PutUint16(buf[bi:], uint16(len(n.nodes)+1))
+		bi += 2
+
+		bi += writeNodeRefToWithOffset(n, math.MaxInt64, math.MaxInt64, buf[bi:])
+	} else {
+		binary.BigEndian.PutUint16(buf[bi:], uint16(len(n.nodes)))
+		bi += 2
+	}
 
 	for i, c := range n.nodes {
 		n := writeNodeRefToWithOffset(c, offsets[i], minOffsets[i], buf[bi:])
@@ -505,11 +512,23 @@ func (l *leafNode) writeTo(nw, hw io.Writer, writeOpts *WriteOpts, buf []byte) (
 	buf[bi] = LeafNodeType
 	bi++
 
-	binary.BigEndian.PutUint16(buf[bi:], uint16(len(l.values)))
-	bi += 2
+	if l.tsMutated() {
+		// NOTE: we store a marker entry to remember the highest timestamp seen
+
+		binary.BigEndian.PutUint16(buf[bi:], uint16(len(l.values)+1))
+		bi += 2
+
+		binary.BigEndian.PutUint16(buf[bi:], 0)
+		bi += 2
+
+		binary.BigEndian.PutUint64(buf[bi:], l._ts)
+		bi += 8
+	} else {
+		binary.BigEndian.PutUint16(buf[bi:], uint16(len(l.values)))
+		bi += 2
+	}
 
 	accH := int64(0)
-
 	for _, v := range l.values {
 		timedValue := v.timedValues[0]
 
